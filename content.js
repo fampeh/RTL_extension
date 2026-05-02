@@ -1,51 +1,78 @@
-let fixedElements = [];
+let fixedNodes = [];
 
 function containsPersian(text) {
   return /[\u0600-\u06FF]/.test(text);
 }
 
+function isEligibleTextContainer(el) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+
+  const tag = el.tagName;
+  if (["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "BUTTON", "SELECT"].includes(tag)) {
+    return false;
+  }
+
+  return true;
+}
+
+function wrapPersianTextNode(textNode) {
+  const wrapper = document.createElement("span");
+  wrapper.setAttribute("data-rtl-fix", "1");
+  wrapper.style.direction = "rtl";
+  wrapper.style.unicodeBidi = "isolate";
+
+  textNode.parentNode.insertBefore(wrapper, textNode);
+  wrapper.appendChild(textNode);
+
+  fixedNodes.push(wrapper);
+}
+
 function fixPersianText() {
   resetFix();
 
-  const elements = document.querySelectorAll("*");
+  const walker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        if (!node.nodeValue || !containsPersian(node.nodeValue)) {
+          return NodeFilter.FILTER_REJECT;
+        }
 
-  elements.forEach(el => {
-    if (
-      el.children.length === 0 &&
-      containsPersian(el.innerText)
-    ) {
-      fixedElements.push({
-        element: el,
-        originalDirection: el.style.direction,
-        originalAlign: el.style.textAlign,
-        originalUnicode: el.style.unicodeBidi
-      });
+        if (!isEligibleTextContainer(node.parentElement)) {
+          return NodeFilter.FILTER_REJECT;
+        }
 
-      el.style.direction = "rtl";
-      el.style.unicodeBidi = "plaintext";
+        if (node.parentElement?.closest("[data-rtl-fix='1']")) {
+          return NodeFilter.FILTER_REJECT;
+        }
 
-      if (
-        getComputedStyle(el).textAlign === "left"
-      ) {
-        el.style.textAlign = "right";
+        return NodeFilter.FILTER_ACCEPT;
       }
     }
-  });
+  );
+
+  const matched = [];
+  while (walker.nextNode()) {
+    matched.push(walker.currentNode);
+  }
+
+  matched.forEach(wrapPersianTextNode);
 }
 
 function resetFix() {
-  fixedElements.forEach(item => {
-    item.element.style.direction =
-      item.originalDirection;
+  fixedNodes.forEach(wrapper => {
+    const parent = wrapper.parentNode;
+    if (!parent) return;
 
-    item.element.style.textAlign =
-      item.originalAlign;
+    while (wrapper.firstChild) {
+      parent.insertBefore(wrapper.firstChild, wrapper);
+    }
 
-    item.element.style.unicodeBidi =
-      item.originalUnicode;
+    parent.removeChild(wrapper);
   });
 
-  fixedElements = [];
+  fixedNodes = [];
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
