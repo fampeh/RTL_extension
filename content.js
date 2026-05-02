@@ -43,6 +43,7 @@ function fixPersianText() {
     if (!el || touched.has(el)) continue;
 
     touched.add(el);
+
     fixedElements.push({
       element: el,
       originalDirection: el.style.direction,
