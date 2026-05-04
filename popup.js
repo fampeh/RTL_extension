@@ -1,6 +1,5 @@
 const autoCheck = document.getElementById("autoCheck");
 const modeGroup = document.getElementById("modeGroup");
-const versionText = document.getElementById("versionText");
 
 const ICONS = {
   rtl: {
@@ -28,10 +27,9 @@ function setActionIcon(mode) {
 }
 
 function setSelectedMode(mode) {
-  const radios = modeGroup.querySelectorAll('input[name="mode"]');
-  radios.forEach(radio => {
-    radio.checked = radio.value === mode;
-    radio.closest(".mode-option")?.classList.toggle("active", radio.value === mode);
+  const options = modeGroup.querySelectorAll(".mode-option");
+  options.forEach(option => {
+    option.classList.toggle("active", option.dataset.mode === mode);
   });
 }
 
@@ -78,19 +76,17 @@ function queryStateAndSync() {
   });
 }
 
-modeGroup.addEventListener("change", event => {
-  const target = event.target;
-  if (!(target instanceof HTMLInputElement)) return;
-  if (target.name !== "mode") return;
-  setMode(target.value);
+modeGroup.addEventListener("click", event => {
+  const option = event.target.closest(".mode-option");
+  if (!(option instanceof HTMLElement)) return;
+  const mode = option.dataset.mode;
+  if (!mode) return;
+  setMode(mode);
 });
 
 autoCheck.addEventListener("change", () => {
   setAutoMode(autoCheck.checked);
 });
-
-const manifest = chrome.runtime.getManifest();
-versionText.textContent = `Version: ${manifest.version}`;
 
 chrome.storage.local.get({ autoMode: true, mode: "default" }, ({ autoMode, mode }) => {
   autoCheck.checked = autoMode;
