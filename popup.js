@@ -5,10 +5,10 @@ const autoCheck = document.getElementById("autoCheck");
 function setActionIcon() {
   chrome.action.setIcon({
     path: {
-      16: "icon.png",
-      32: "icon.png",
-      48: "icon.png",
-      128: "icon.png"
+      16: "icons/rtl-16.png",
+      32: "icons/rtl-32.png",
+      48: "icons/rtl-48.png",
+      128: "icons/rtl-128.png"
     }
   });
 }
@@ -16,21 +16,21 @@ function setActionIcon() {
 function setDefaultIcon() {
   chrome.action.setIcon({
     path: {
-      16: "icon.png",
-      32: "icon.png",
-      48: "icon.png",
-      128: "icon.png"
+      16: "icons/default-16.png",
+      32: "icons/default-32.png",
+      48: "icons/default-48.png",
+      128: "icons/default-128.png"
     }
   });
 }
 
 function setActiveState(isFixed) {
-  setActionIcon();
-
   if (isFixed) {
+    setActionIcon();
     fixBtn.classList.add("active");
     resetBtn.classList.remove("active");
   } else {
+    setDefaultIcon();
     resetBtn.classList.add("active");
     fixBtn.classList.remove("active");
   }
