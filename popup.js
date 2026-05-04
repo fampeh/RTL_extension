@@ -2,7 +2,7 @@ const fixBtn = document.getElementById("fixBtn");
 const resetBtn = document.getElementById("resetBtn");
 const autoCheck = document.getElementById("autoCheck");
 
-function setActionIcon(isFixed) {
+function setActionIcon() {
   chrome.action.setIcon({
     path: {
       16: "icon.png",
@@ -25,7 +25,7 @@ function setDefaultIcon() {
 }
 
 function setActiveState(isFixed) {
-  setActionIcon(isFixed);
+  setActionIcon();
 
   if (isFixed) {
     fixBtn.classList.add("active");

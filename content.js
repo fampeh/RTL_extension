@@ -253,7 +253,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
   document.addEventListener("DOMContentLoaded", initAutoMode);
 }
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === "fix") {
     fixPersianText();
     sendResponse({ fixed: true, auto: autoMode });
