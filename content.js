@@ -20,6 +20,15 @@ function isEligibleTextContainer(el) {
   return true;
 }
 
+function isIntrinsicLtrZone(el) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+  return Boolean(
+    el.closest(
+      "pre, code, kbd, samp, var, math, textarea, input, [contenteditable='true'], [data-no-rtl='1']"
+    )
+  );
+}
+
 function isBlockElement(el) {
   if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
   const display = window.getComputedStyle(el).display;
@@ -108,17 +117,6 @@ function wrapPersianTextNode(textNode) {
   textNode.remove();
 }
 
-function wrapNonPersianTextNode(textNode) {
-  const wrapper = document.createElement("span");
-  wrapper.setAttribute("data-rtl-fix", "1");
-  wrapper.style.direction = "ltr";
-  wrapper.style.unicodeBidi = "isolate";
-  wrapper.textContent = textNode.nodeValue;
-  textNode.parentNode.insertBefore(wrapper, textNode);
-  textNode.remove();
-  fixedNodes.push(wrapper);
-}
-
 function fixPersianText() {
   resetFix();
 
@@ -132,6 +130,10 @@ function fixPersianText() {
         }
 
         if (!isEligibleTextContainer(node.parentElement)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        if (isIntrinsicLtrZone(node.parentElement)) {
           return NodeFilter.FILTER_REJECT;
         }
 
@@ -156,27 +158,6 @@ function fixPersianText() {
       fixedBlocks.push(block);
     }
     wrapPersianTextNode(node);
-  });
-
-  fixedBlocks.forEach(block => {
-    const walker2 = document.createTreeWalker(
-      block,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode(node) {
-          if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
-          if (node.parentElement?.closest("[data-rtl-fix='1']")) return NodeFilter.FILTER_REJECT;
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      }
-    );
-
-    const plainText = [];
-    while (walker2.nextNode()) {
-      plainText.push(walker2.currentNode);
-    }
-
-    plainText.forEach(wrapNonPersianTextNode);
   });
 }
 
