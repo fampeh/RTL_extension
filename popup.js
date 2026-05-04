@@ -1,6 +1,75 @@
 const fixBtn = document.getElementById("fixBtn");
 const resetBtn = document.getElementById("resetBtn");
-const status = document.getElementById("status");
+const autoCheck = document.getElementById("autoCheck");
+
+function setActionIcon(isFixed) {
+  chrome.action.setIcon({
+    path: {
+      48: isFixed ? "icon_48.png" : "icon.png",
+      128: isFixed ? "icon_48.png" : "icon.png"
+    }
+  });
+}
+
+function setDefaultIcon() {
+  chrome.action.setIcon({
+    path: {
+      48: "icon_48.png",
+      128: "icon.png"
+    }
+  });
+}
+
+function setActiveState(isFixed) {
+  setActionIcon(isFixed);
+
+  if (isFixed) {
+    fixBtn.classList.add("active");
+    resetBtn.classList.remove("active");
+  } else {
+    resetBtn.classList.add("active");
+    fixBtn.classList.remove("active");
+  }
+}
+
+function setAutoCheckbox(enabled) {
+  autoCheck.checked = enabled;
+}
+
+function setAutoMode(enabled, notify = true) {
+  chrome.storage.local.set({ autoMode: enabled }, () => {
+    setAutoCheckbox(enabled);
+    if (notify) {
+      chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+        if (!tab?.id) return;
+        chrome.tabs.sendMessage(tab.id, { action: "setAuto", auto: enabled });
+      });
+    }
+  });
+}
+
+async function queryState() {
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true
+  });
+
+  if (!tab?.id) {
+    setDefaultIcon();
+    return;
+  }
+
+  chrome.tabs.sendMessage(tab.id, { action: "state" }, response => {
+    if (chrome.runtime.lastError || !response) {
+      setDefaultIcon();
+      return;
+    }
+    setActiveState(response.fixed);
+    if (typeof response.auto === "boolean") {
+      setAutoCheckbox(response.auto);
+    }
+  });
+}
 
 async function sendAction(action) {
   const [tab] = await chrome.tabs.query({
@@ -8,22 +77,28 @@ async function sendAction(action) {
     currentWindow: true
   });
 
-  chrome.tabs.sendMessage(tab.id, { action });
+  if (!tab?.id) return;
 
-  status.textContent =
-    action === "fix"
-      ? "Persian text fixed"
-      : "Reset to original";
+  chrome.tabs.sendMessage(tab.id, { action }, response => {
+    if (chrome.runtime.lastError || !response) return;
+    setActiveState(response.fixed);
+  });
 }
 
 fixBtn.addEventListener("click", () => {
-  fixBtn.classList.add("active");
-  resetBtn.classList.remove("active");
   sendAction("fix");
 });
 
 resetBtn.addEventListener("click", () => {
-  resetBtn.classList.add("active");
-  fixBtn.classList.remove("active");
   sendAction("reset");
+});
+
+autoCheck.addEventListener("change", () => {
+  setAutoMode(autoCheck.checked);
+});
+
+chrome.storage.local.get({ autoMode: true }, ({ autoMode }) => {
+  setAutoCheckbox(autoMode);
+  setAutoMode(autoMode, false);
+  queryState();
 });

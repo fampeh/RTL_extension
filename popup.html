@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <style>
     body {
-      width: 120px;
+      width: 160px;
       padding: 12px;
       margin: 0;
       font-family: 'Segoe UI', Tahoma, sans-serif;
@@ -28,17 +28,24 @@
       color: white;
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
-    .status {
-      font-size: 10px;
+    .auto-row {
       margin-top: 8px;
-      color: #555;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
   </style>
 </head>
 <body>
   <button id="fixBtn">RTL</button>
   <button id="resetBtn">LTR</button>
-  <div id="status" class="status"></div>
+
+  <label class="auto-row" for="autoCheck">
+    <input type="checkbox" id="autoCheck" />
+    <span>Auto Fix</span>
+  </label>
 
   <script src="popup.js"></script>
 </body>
