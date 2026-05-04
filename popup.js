@@ -81,6 +81,9 @@ modeGroup.addEventListener("click", event => {
   if (!(option instanceof HTMLElement)) return;
   const mode = option.dataset.mode;
   if (!mode) return;
+  if (autoCheck.checked) {
+    setAutoMode(false);
+  }
   setMode(mode);
 });
 
