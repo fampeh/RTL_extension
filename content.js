@@ -41,7 +41,7 @@ function applyBlockAlignment(block) {
   block.dataset.rtlFixOriginalUnicodeBidi = block.style.unicodeBidi || "";
   block.style.textAlign = "right";
   block.style.direction = "rtl";
-  block.style.unicodeBidi = "plaintext";
+  block.style.unicodeBidi = "isolate";
   applyListAncestorAlignment(block);
 }
 
@@ -67,7 +67,7 @@ function applyListAncestorAlignment(block) {
         node.dataset.rtlFixOriginalUnicodeBidi = node.style.unicodeBidi || "";
         node.style.textAlign = "right";
         node.style.direction = "rtl";
-        node.style.unicodeBidi = "plaintext";
+        node.style.unicodeBidi = "isolate";
         fixedBlocks.push(node);
       }
       break;
