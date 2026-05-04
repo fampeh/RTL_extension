@@ -28,17 +28,32 @@
       color: white;
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
-    .status {
-      font-size: 10px;
-      margin-top: 8px;
-      color: #555;
+    .auto-row {
+      margin: 8px 0;
+      font-size: 12px;
+      color: #333;
+      text-align: left;
+    }
+    .auto-row label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .auto-row input {
+      width: 16px;
+      height: 16px;
+      accent-color: #4caf50;
     }
   </style>
 </head>
 <body>
   <button id="fixBtn">RTL</button>
   <button id="resetBtn">LTR</button>
-  <div id="status" class="status"></div>
+  <div class="auto-row">
+    <label><input id="autoCheck" type="checkbox"> Auto</label>
+  </div>
 
   <script src="popup.js"></script>
 </body>
