@@ -5,8 +5,10 @@ const autoCheck = document.getElementById("autoCheck");
 function setActionIcon(isFixed) {
   chrome.action.setIcon({
     path: {
-      48: isFixed ? "icon_48.png" : "icon.png",
-      128: isFixed ? "icon_48.png" : "icon.png"
+      16: "icon.png",
+      32: "icon.png",
+      48: "icon.png",
+      128: "icon.png"
     }
   });
 }
@@ -14,7 +16,9 @@ function setActionIcon(isFixed) {
 function setDefaultIcon() {
   chrome.action.setIcon({
     path: {
-      48: "icon_48.png",
+      16: "icon.png",
+      32: "icon.png",
+      48: "icon.png",
       128: "icon.png"
     }
   });
