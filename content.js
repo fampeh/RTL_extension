@@ -1,11 +1,8 @@
-// --- content.js ---
-
 let fixedNodes = [];
 let fixedBlocks = [];
 let autoMode = true;
 let observer = null;
 let mutationTimer = null;
-let isProcessing = false; // جلوگیری از اجرای همزمان و حلقه بی‌نهایت
 
 function containsPersian(text) {
   return /[\u0600-\u06FF]/.test(text);
@@ -13,10 +10,12 @@ function containsPersian(text) {
 
 function isEligibleTextContainer(el) {
   if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+
   const tag = el.tagName;
-  if (["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "BUTTON", "SELECT", "CODE"].includes(tag)) {
+  if (["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "BUTTON", "SELECT"].includes(tag)) {
     return false;
   }
+
   return true;
 }
 
@@ -42,7 +41,7 @@ function applyBlockAlignment(block) {
   block.dataset.rtlFixOriginalUnicodeBidi = block.style.unicodeBidi || "";
   block.style.textAlign = "right";
   block.style.direction = "rtl";
-  block.style.unicodeBidi = "isolate-override";
+  block.style.unicodeBidi = "plaintext";
   applyListAncestorAlignment(block);
 }
 
@@ -68,7 +67,7 @@ function applyListAncestorAlignment(block) {
         node.dataset.rtlFixOriginalUnicodeBidi = node.style.unicodeBidi || "";
         node.style.textAlign = "right";
         node.style.direction = "rtl";
-        node.style.unicodeBidi = "isolate-override";
+        node.style.unicodeBidi = "plaintext";
         fixedBlocks.push(node);
       }
       break;
@@ -80,7 +79,7 @@ function applyListAncestorAlignment(block) {
 function wrapTextFragment(text, isPersian) {
   const wrapper = document.createElement("span");
   wrapper.setAttribute("data-rtl-fix", "1");
-  wrapper.style.unicodeBidi = "isolate-override";
+  wrapper.style.unicodeBidi = "isolate";
 
   if (isPersian) {
     wrapper.style.direction = "rtl";
@@ -104,24 +103,19 @@ function wrapPersianTextNode(textNode) {
     fragment.appendChild(wrapTextFragment(part, isPersian));
   });
 
-  if (textNode.parentNode) {
-    textNode.parentNode.insertBefore(fragment, textNode);
-    textNode.remove();
-  }
+  textNode.parentNode.insertBefore(fragment, textNode);
+  textNode.remove();
 }
 
 function wrapNonPersianTextNode(textNode) {
   const wrapper = document.createElement("span");
   wrapper.setAttribute("data-rtl-fix", "1");
   wrapper.style.direction = "ltr";
-  wrapper.style.unicodeBidi = "isolate-override";
+  wrapper.style.unicodeBidi = "isolate";
   wrapper.textContent = textNode.nodeValue;
-  
-  if (textNode.parentNode) {
-    textNode.parentNode.insertBefore(wrapper, textNode);
-    textNode.remove();
-    fixedNodes.push(wrapper);
-  }
+  textNode.parentNode.insertBefore(wrapper, textNode);
+  textNode.remove();
+  fixedNodes.push(wrapper);
 }
 
 function fixPersianText() {
@@ -132,15 +126,18 @@ function fixPersianText() {
     NodeFilter.SHOW_TEXT,
     {
       acceptNode(node) {
-        if (!node.nodeValue || !node.nodeValue.trim() || !containsPersian(node.nodeValue)) {
+        if (!node.nodeValue || !containsPersian(node.nodeValue)) {
           return NodeFilter.FILTER_REJECT;
         }
+
         if (!isEligibleTextContainer(node.parentElement)) {
           return NodeFilter.FILTER_REJECT;
         }
+
         if (node.parentElement?.closest("[data-rtl-fix='1']")) {
           return NodeFilter.FILTER_REJECT;
         }
+
         return NodeFilter.FILTER_ACCEPT;
       }
     }
@@ -160,14 +157,13 @@ function fixPersianText() {
     wrapPersianTextNode(node);
   });
 
-  // بخش دوم: انگلیسی‌های داخل بلاک راست‌چین شده
   fixedBlocks.forEach(block => {
     const walker2 = document.createTreeWalker(
       block,
       NodeFilter.SHOW_TEXT,
       {
         acceptNode(node) {
-          if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+          if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
           if (node.parentElement?.closest("[data-rtl-fix='1']")) return NodeFilter.FILTER_REJECT;
           return NodeFilter.FILTER_ACCEPT;
         }
@@ -191,6 +187,7 @@ function resetFix() {
     while (wrapper.firstChild) {
       parent.insertBefore(wrapper.firstChild, wrapper);
     }
+
     parent.removeChild(wrapper);
   });
 
@@ -200,12 +197,6 @@ function resetFix() {
 }
 
 function processPage() {
-  if (isProcessing) return;
-  isProcessing = true;
-  
-  // متوقف کردن موقت آبزرور تا از حلقه بی‌نهایت جلوگیری شود
-  stopAutoFixObserver();
-
   const bodyText = document.body.textContent || "";
   const hasPersian = /[\u0600-\u06FF]/.test(bodyText);
   if (hasPersian) {
@@ -213,12 +204,6 @@ function processPage() {
   } else {
     resetFix();
   }
-
-  // روشن کردن مجدد آبزرور اگر حالت خودکار فعال باشد
-  if (autoMode) {
-    startAutoFixObserver();
-  }
-  isProcessing = false;
 }
 
 function stopAutoFixObserver() {
@@ -235,36 +220,30 @@ function stopAutoFixObserver() {
 function startAutoFixObserver() {
   if (!document.body) return;
   stopAutoFixObserver();
-  
-  observer = new MutationObserver((mutations) => {
-    // نادیده گرفتن تغییراتی که خودمان ایجاد کردیم (جهت اطمینان مضاعف)
-    const isOwnChange = mutations.every(m => m.target.dataset && m.target.dataset.rtlFix === "1");
-    if (isOwnChange) return;
-
+  observer = new MutationObserver(() => {
     if (mutationTimer) clearTimeout(mutationTimer);
-    mutationTimer = setTimeout(processPage, 500); // 500 میلی ثانیه تاخیر برای عملکرد بهتر
+    mutationTimer = setTimeout(processPage, 250);
   });
-  
   observer.observe(document.body, {
     childList: true,
     subtree: true,
     characterData: true
   });
+  processPage();
 }
 
 function setAutoMode(enabled) {
   autoMode = enabled;
   if (autoMode) {
-    processPage();
+    startAutoFixObserver();
   } else {
     stopAutoFixObserver();
-    resetFix();
   }
 }
 
 function initAutoMode() {
-  chrome.storage.local.get({ autoMode: true }, ({ autoMode: storedAutoMode }) => {
-    setAutoMode(storedAutoMode);
+  chrome.storage.local.get({ autoMode: true }, ({ autoMode }) => {
+    setAutoMode(autoMode);
   });
 }
 
@@ -274,19 +253,27 @@ if (document.readyState === "complete" || document.readyState === "interactive")
   document.addEventListener("DOMContentLoaded", initAutoMode);
 }
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === "fix") {
-    processPage();
+    fixPersianText();
     sendResponse({ fixed: true, auto: autoMode });
-  } else if (msg.action === "reset") {
-    stopAutoFixObserver();
+    return true;
+  }
+
+  if (msg.action === "reset") {
     resetFix();
     sendResponse({ fixed: false, auto: autoMode });
-  } else if (msg.action === "state") {
+    return true;
+  }
+
+  if (msg.action === "state") {
     sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode });
-  } else if (msg.action === "setAuto") {
+    return true;
+  }
+
+  if (msg.action === "setAuto") {
     setAutoMode(Boolean(msg.auto));
     sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode });
+    return true;
   }
-  return true; 
 });

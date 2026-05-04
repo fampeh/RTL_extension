@@ -1,28 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "deepRIght",
-  "version": "4.0",
-  "description": "deepRight  راست‌چین کردن متن‌های فارسی در چت دیپ‌سیک",
-  "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": ["https://chat.deepseek.com/*"],
-  "icons": {
-    "16": "icons/default-16.png",
-    "32": "icons/default-32.png",
-    "48": "icons/default-48.png",
-    "128": "icons/default-128.png"
-  },
+  "name": "Universal Persian RTL Fix",
+  "version": "4.3",
+  "description": "متن‌های فارسی را در وب‌سایت‌ها با RTL درست و پایدار نمایش می‌دهد",
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icons/default-16.png",
-      "32": "icons/default-32.png",
-      "48": "icons/default-48.png",
-      "128": "icons/default-128.png"
-    }
+    "default_icon": "default-128.png"
+  },
+  "icons": {
+    "16": "default-16.png",
+    "32": "default-32.png",
+    "48": "default-48.png",
+    "128": "default-128.png"
   },
   "content_scripts": [
     {
-      "matches": ["https://chat.deepseek.com/*"],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
