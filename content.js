@@ -43,14 +43,14 @@ function findNearestBlockContainer(el) {
   return null;
 }
 
-function applyBlockAlignment(block) {
+function applyBlockAlignment(block, preferredDirection = "rtl") {
   if (!block || block.dataset.rtlFixBlock === "1") return;
   block.dataset.rtlFixBlock = "1";
   block.dataset.rtlFixOriginalTextAlign = block.style.textAlign || "";
   block.dataset.rtlFixOriginalDirection = block.style.direction || "";
   block.dataset.rtlFixOriginalUnicodeBidi = block.style.unicodeBidi || "";
   block.style.textAlign = "right";
-  block.style.direction = "rtl";
+  block.style.direction = preferredDirection;
   block.style.unicodeBidi = "isolate";
   applyListAncestorAlignment(block);
 }
@@ -117,8 +117,25 @@ function wrapPersianTextNode(textNode) {
   textNode.remove();
 }
 
+function fixIntrinsicZonesAlignment() {
+  const intrinsicSelectors = "pre, code, kbd, samp, var, math";
+  const intrinsicZones = document.querySelectorAll(intrinsicSelectors);
+
+  intrinsicZones.forEach(zone => {
+    const zoneText = zone.textContent || "";
+    if (!containsPersian(zoneText)) return;
+
+    const block = findNearestBlockContainer(zone) || zone;
+    if (!fixedBlocks.includes(block)) {
+      applyBlockAlignment(block, "ltr");
+      fixedBlocks.push(block);
+    }
+  });
+}
+
 function fixPersianText() {
   resetFix();
+  fixIntrinsicZonesAlignment();
 
   const walker = document.createTreeWalker(
     document.body,
