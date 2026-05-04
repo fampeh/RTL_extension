@@ -1,6 +1,7 @@
 let fixedNodes = [];
 let fixedBlocks = [];
 let autoMode = true;
+let currentMode = "default";
 let observer = null;
 let mutationTimer = null;
 
@@ -232,48 +233,59 @@ function startAutoFixObserver() {
   processPage();
 }
 
+function applyMode(mode) {
+  currentMode = mode;
+
+  if (mode === "rtl") {
+    fixPersianText();
+    return;
+  }
+
+  resetFix();
+}
+
 function setAutoMode(enabled) {
   autoMode = enabled;
   if (autoMode) {
     startAutoFixObserver();
   } else {
     stopAutoFixObserver();
+    applyMode(currentMode);
   }
 }
 
-function initAutoMode() {
-  chrome.storage.local.get({ autoMode: true }, ({ autoMode }) => {
+function initSettings() {
+  chrome.storage.local.get({ autoMode: true, mode: "default" }, ({ autoMode, mode }) => {
+    currentMode = mode;
     setAutoMode(autoMode);
+    if (!autoMode) {
+      applyMode(mode);
+    }
   });
 }
 
 if (document.readyState === "complete" || document.readyState === "interactive") {
-  initAutoMode();
+  initSettings();
 } else {
-  document.addEventListener("DOMContentLoaded", initAutoMode);
+  document.addEventListener("DOMContentLoaded", initSettings);
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.action === "fix") {
-    fixPersianText();
-    sendResponse({ fixed: true, auto: autoMode });
-    return true;
-  }
-
-  if (msg.action === "reset") {
-    resetFix();
-    sendResponse({ fixed: false, auto: autoMode });
+  if (msg.action === "setMode") {
+    const mode = ["rtl", "ltr", "default"].includes(msg.mode) ? msg.mode : "default";
+    applyMode(mode);
+    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode, mode: currentMode });
     return true;
   }
 
   if (msg.action === "state") {
-    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode });
+    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode, mode: currentMode });
     return true;
   }
 
   if (msg.action === "setAuto") {
     setAutoMode(Boolean(msg.auto));
-    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode });
+    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode, mode: currentMode });
     return true;
   }
 });
