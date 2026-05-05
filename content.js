@@ -4,6 +4,25 @@ let autoMode = true;
 let currentMode = "default";
 let observer = null;
 let mutationTimer = null;
+const RTL_FIX_STYLE_ID = "rtl-fix-intrinsic-zones-style";
+const INTRINSIC_LTR_SELECTOR = [
+  "pre",
+  "code",
+  "kbd",
+  "samp",
+  "var",
+  "math",
+  ".hljs",
+  ".highlight",
+  ".prism-code",
+  ".token",
+  ".chroma",
+  ".CodeMirror",
+  ".monaco-editor",
+  "[class*='language-']",
+  "[class*='lang-']",
+  "[data-no-rtl='1']"
+].join(", ");
 
 function containsPersian(text) {
   return /[\u0600-\u06FF]/.test(text);
@@ -22,11 +41,7 @@ function isEligibleTextContainer(el) {
 
 function isIntrinsicLtrZone(el) {
   if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
-  return Boolean(
-    el.closest(
-      "pre, code, kbd, samp, var, math, textarea, input, [contenteditable='true'], [data-no-rtl='1']"
-    )
-  );
+  return Boolean(el.closest(`${INTRINSIC_LTR_SELECTOR}, textarea, input, [contenteditable='true']`));
 }
 
 function isBlockElement(el) {
@@ -118,13 +133,9 @@ function wrapPersianTextNode(textNode) {
 }
 
 function fixIntrinsicZonesAlignment() {
-  const intrinsicSelectors = "pre, code, kbd, samp, var, math";
-  const intrinsicZones = document.querySelectorAll(intrinsicSelectors);
+  const intrinsicZones = document.querySelectorAll(INTRINSIC_LTR_SELECTOR);
 
   intrinsicZones.forEach(zone => {
-    const zoneText = zone.textContent || "";
-    if (!containsPersian(zoneText)) return;
-
     const block = findNearestBlockContainer(zone) || zone;
     if (!fixedBlocks.includes(block)) {
       applyBlockAlignment(block, "ltr");
@@ -196,6 +207,7 @@ function resetFix() {
 }
 
 function processPage() {
+  ensureIntrinsicLtrStyles();
   const bodyText = document.body.textContent || "";
   const hasPersian = /[\u0600-\u06FF]/.test(bodyText);
   if (hasPersian) {
@@ -203,6 +215,21 @@ function processPage() {
   } else {
     resetFix();
   }
+}
+
+function ensureIntrinsicLtrStyles() {
+  if (document.getElementById(RTL_FIX_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = RTL_FIX_STYLE_ID;
+  style.textContent = `
+    ${INTRINSIC_LTR_SELECTOR},
+    ${INTRINSIC_LTR_SELECTOR} * {
+      direction: ltr !important;
+      text-align: left !important;
+      unicode-bidi: plaintext;
+    }
+  `;
+  document.documentElement.appendChild(style);
 }
 
 function stopAutoFixObserver() {
