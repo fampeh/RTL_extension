@@ -26,6 +26,10 @@ function setActionIcon(mode) {
   chrome.action.setIcon({ path: ICONS[mode] || ICONS.default });
 }
 
+function getEffectiveIconMode(mode, autoMode) {
+  return autoMode ? "rtl" : mode;
+}
+
 function setSelectedMode(mode) {
   const options = modeGroup.querySelectorAll(".mode-option");
   options.forEach(option => {
@@ -39,14 +43,27 @@ async function withActiveTab(callback) {
   callback(tab.id);
 }
 
-function setMode(mode, notify = true) {
-  chrome.storage.local.set({ mode }, () => {
-    setSelectedMode(mode);
-    setActionIcon(mode);
+function safeSendMessage(tabId, payload, onResponse) {
+  chrome.tabs.sendMessage(tabId, payload, response => {
+    if (chrome.runtime.lastError) {
+      return;
+    }
+    if (typeof onResponse === "function") {
+      onResponse(response);
+    }
+  });
+}
 
-    if (!notify) return;
-    withActiveTab(tabId => {
-      chrome.tabs.sendMessage(tabId, { action: "setMode", mode });
+function setMode(mode, notify = true) {
+  chrome.storage.local.get({ autoMode: true }, ({ autoMode }) => {
+    chrome.storage.local.set({ mode }, () => {
+      setSelectedMode(mode);
+      setActionIcon(getEffectiveIconMode(mode, autoMode));
+
+      if (!notify) return;
+      withActiveTab(tabId => {
+        safeSendMessage(tabId, { action: "setMode", mode });
+      });
     });
   });
 }
@@ -54,24 +71,28 @@ function setMode(mode, notify = true) {
 function setAutoMode(enabled, notify = true) {
   chrome.storage.local.set({ autoMode: enabled }, () => {
     autoCheck.checked = enabled;
+    chrome.storage.local.get({ mode: "default" }, ({ mode }) => {
+      setActionIcon(getEffectiveIconMode(mode, enabled));
+    });
     if (!notify) return;
     withActiveTab(tabId => {
-      chrome.tabs.sendMessage(tabId, { action: "setAuto", auto: enabled });
+      safeSendMessage(tabId, { action: "setAuto", auto: enabled });
     });
   });
 }
 
 function queryStateAndSync() {
   withActiveTab(tabId => {
-    chrome.tabs.sendMessage(tabId, { action: "state" }, response => {
-      if (chrome.runtime.lastError || !response) return;
+    safeSendMessage(tabId, { action: "state" }, response => {
+      if (!response) return;
       if (response.mode) {
         setSelectedMode(response.mode);
-        setActionIcon(response.mode);
       }
       if (typeof response.auto === "boolean") {
         autoCheck.checked = response.auto;
       }
+      const effectiveMode = getEffectiveIconMode(response.mode || "default", Boolean(response.auto));
+      setActionIcon(effectiveMode);
     });
   });
 }

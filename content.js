@@ -34,6 +34,13 @@ function containsPersian(text) {
   return /[\u0600-\u06FF]/.test(text);
 }
 
+function isCleanPersianText(text) {
+  if (!text || !containsPersian(text)) return false;
+  const stripped = text.trim();
+  if (!stripped) return false;
+  return /^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s\u200c\u200f\u061f\u060c\u061b.,!?:;()\[\]{}«»"'\-–—]+$/.test(stripped);
+}
+
 function isEligibleTextContainer(el) {
   if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
 
@@ -180,6 +187,11 @@ function processRoot(root = document.body) {
       applyBlockAlignment(block);
       fixedBlocks.add(block);
     }
+
+    if (isCleanPersianText(node.nodeValue)) {
+      continue;
+    }
+
     wrapPersianTextNode(node);
   }
 }
@@ -375,18 +387,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === "setMode") {
     const mode = ["rtl", "ltr", "default"].includes(msg.mode) ? msg.mode : "default";
     applyMode(mode);
-    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode, mode: currentMode });
+    sendResponse({ fixed: fixedNodes.size > 0, auto: autoMode, mode: currentMode });
     return true;
   }
 
   if (msg.action === "state") {
-    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode, mode: currentMode });
+    sendResponse({ fixed: fixedNodes.size > 0, auto: autoMode, mode: currentMode });
     return true;
   }
 
   if (msg.action === "setAuto") {
     setAutoMode(Boolean(msg.auto));
-    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode, mode: currentMode });
+    sendResponse({ fixed: fixedNodes.size > 0, auto: autoMode, mode: currentMode });
     return true;
   }
 });
