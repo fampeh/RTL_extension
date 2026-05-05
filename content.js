@@ -140,6 +140,7 @@ function processRoot(root = document.body) {
     root = root.parentElement;
   }
   if (!root || root.nodeType !== Node.ELEMENT_NODE) return;
+  if (fixedNodes.size > 0 && root === document.body) return;
   fixIntrinsicZonesAlignment(root);
   const walker = document.createTreeWalker(
     root,
@@ -348,6 +349,8 @@ function setAutoMode(enabled) {
   autoMode = enabled;
   if (autoMode) {
     startAutoFixObserver();
+    pendingRoots.add(document.body);
+    scheduleProcess(true);
   } else {
     stopAutoFixObserver();
     applyMode(currentMode);
@@ -355,12 +358,10 @@ function setAutoMode(enabled) {
 }
 
 function initSettings() {
-  chrome.storage.local.get({ autoMode: true, mode: "default" }, ({ autoMode, mode }) => {
+  chrome.storage.local.get({ autoMode: true, mode: "default" }, ({ autoMode: storedAuto, mode }) => {
     currentMode = mode;
-    setAutoMode(autoMode);
-    if (!autoMode) {
-      applyMode(mode);
-    }
+    applyMode(mode);
+    setAutoMode(storedAuto);
   });
 }
 
