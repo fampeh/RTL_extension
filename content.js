@@ -1,279 +1,210 @@
-let fixedNodes = [];
-let fixedBlocks = [];
-let autoMode = true;
-let observer = null;
-let mutationTimer = null;
+(function () {
+  const EXCLUDED_TAGS = new Set(['CODE', 'PRE', 'KBD', 'SAMP', 'VAR', 'MATH', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'TEXT']);
+  const EXCLUDED_CLASSES = ['hljs', 'highlight', 'prism-code', 'token', 'chroma', 'CodeMirror', 'monaco-editor'];
+  const BLOCK_TAGS = new Set(['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'ARTICLE', 'SECTION', 'FIGCAPTION']);
+  
+  const PERSIAN_REGEX = /[\u0600-\u06FF]/;
+  const WORD_REGEX = /[\p{L}\p{N}]+/gu;
 
-function containsPersian(text) {
-  return /[\u0600-\u06FF]/.test(text);
-}
+  let settings = {
+    autoFix: true,
+    mode: 'default' // 'default', 'rtl', 'ltr'
+  };
 
-function isEligibleTextContainer(el) {
-  if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+  let observer = null;
+  let pendingNodes = new Set();
+  let isProcessing = false;
 
-  const tag = el.tagName;
-  if (["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "BUTTON", "SELECT"].includes(tag)) {
+  const styleId = 'persian-text-fixer-style';
+
+  function injectStyles() {
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .ptf-rtl-block {
+        direction: rtl !important;
+        text-align: right !important;
+        unicode-bidi: plaintext !important;
+      }
+      .ptf-ltr-block {
+        direction: ltr !important;
+        text-align: left !important;
+        unicode-bidi: plaintext !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function isExcluded(node) {
+    let curr = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    while (curr && curr !== document.body) {
+      if (EXCLUDED_TAGS.has(curr.tagName) || curr.isContentEditable) return true;
+      if (curr.classList) {
+        for (let cls of EXCLUDED_CLASSES) {
+          if (curr.classList.contains(cls)) return true;
+        }
+      }
+      curr = curr.parentElement;
+    }
     return false;
   }
 
-  return true;
-}
-
-function isBlockElement(el) {
-  if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
-  const display = window.getComputedStyle(el).display;
-  return ["block", "flex", "grid", "list-item", "table", "table-row", "table-cell", "flow-root"].includes(display);
-}
-
-function findNearestBlockContainer(el) {
-  while (el && el !== document.body) {
-    if (isBlockElement(el)) return el;
-    el = el.parentElement;
-  }
-  return null;
-}
-
-function applyBlockAlignment(block) {
-  if (!block || block.dataset.rtlFixBlock === "1") return;
-  block.dataset.rtlFixBlock = "1";
-  block.dataset.rtlFixOriginalTextAlign = block.style.textAlign || "";
-  block.dataset.rtlFixOriginalDirection = block.style.direction || "";
-  block.dataset.rtlFixOriginalUnicodeBidi = block.style.unicodeBidi || "";
-  block.style.textAlign = "right";
-  block.style.direction = "rtl";
-  block.style.unicodeBidi = "isolate";
-  applyListAncestorAlignment(block);
-}
-
-function restoreBlockAlignment(block) {
-  if (!block || block.dataset.rtlFixBlock !== "1") return;
-  block.style.textAlign = block.dataset.rtlFixOriginalTextAlign || "";
-  block.style.direction = block.dataset.rtlFixOriginalDirection || "";
-  block.style.unicodeBidi = block.dataset.rtlFixOriginalUnicodeBidi || "";
-  delete block.dataset.rtlFixBlock;
-  delete block.dataset.rtlFixOriginalTextAlign;
-  delete block.dataset.rtlFixOriginalDirection;
-  delete block.dataset.rtlFixOriginalUnicodeBidi;
-}
-
-function applyListAncestorAlignment(block) {
-  let node = block;
-  while (node && node !== document.body) {
-    if (node.tagName === "UL" || node.tagName === "OL") {
-      if (node.dataset.rtlFixBlock !== "1") {
-        node.dataset.rtlFixBlock = "1";
-        node.dataset.rtlFixOriginalTextAlign = node.style.textAlign || "";
-        node.dataset.rtlFixOriginalDirection = node.style.direction || "";
-        node.dataset.rtlFixOriginalUnicodeBidi = node.style.unicodeBidi || "";
-        node.style.textAlign = "right";
-        node.style.direction = "rtl";
-        node.style.unicodeBidi = "isolate";
-        fixedBlocks.push(node);
-      }
-      break;
+  function getDominantLanguage(text) {
+    if (!PERSIAN_REGEX.test(text)) return 'en';
+    const words = text.match(WORD_REGEX);
+    if (!words) return 'en';
+    
+    let faCount = 0;
+    let enCount = 0;
+    
+    for (const word of words) {
+      if (PERSIAN_REGEX.test(word)) faCount++;
+      else if (/[a-zA-Z]/.test(word)) enCount++;
     }
-    node = node.parentElement;
-  }
-}
-
-function wrapTextFragment(text, isPersian) {
-  const wrapper = document.createElement("span");
-  wrapper.setAttribute("data-rtl-fix", "1");
-  wrapper.style.unicodeBidi = "isolate";
-
-  if (isPersian) {
-    wrapper.style.direction = "rtl";
-  } else {
-    wrapper.style.direction = "ltr";
+    
+    return faCount > 0 && faCount >= enCount ? 'fa' : 'en';
   }
 
-  wrapper.textContent = text;
-  fixedNodes.push(wrapper);
-  return wrapper;
-}
+  function getNearestBlockParent(node) {
+    let curr = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    while (curr && curr !== document.body) {
+      if (BLOCK_TAGS.has(curr.tagName)) return curr;
+      const display = window.getComputedStyle(curr).display;
+      if (display === 'block' || display === 'flex' || display === 'grid' || display === 'list-item') {
+        return curr;
+      }
+      curr = curr.parentElement;
+    }
+    return curr;
+  }
 
-function wrapPersianTextNode(textNode) {
-  const text = textNode.nodeValue;
-  const parts = text.split(/([\u0600-\u06FF]+)/);
-  const fragment = document.createDocumentFragment();
+  function processNode(node) {
+    if (settings.mode === 'ltr') {
+      clearFixes(node);
+      return;
+    }
 
-  parts.forEach(part => {
-    if (!part) return;
-    const isPersian = containsPersian(part);
-    fragment.appendChild(wrapTextFragment(part, isPersian));
-  });
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent.trim();
+      if (!text || isExcluded(node)) return;
 
-  textNode.parentNode.insertBefore(fragment, textNode);
-  textNode.remove();
-}
+      const blockParent = getNearestBlockParent(node);
+      if (!blockParent || blockParent.hasAttribute('data-ptf-processed')) return;
 
-function wrapNonPersianTextNode(textNode) {
-  const wrapper = document.createElement("span");
-  wrapper.setAttribute("data-rtl-fix", "1");
-  wrapper.style.direction = "ltr";
-  wrapper.style.unicodeBidi = "isolate";
-  wrapper.textContent = textNode.nodeValue;
-  textNode.parentNode.insertBefore(wrapper, textNode);
-  textNode.remove();
-  fixedNodes.push(wrapper);
-}
+      const blockText = blockParent.innerText || blockParent.textContent;
+      const lang = getDominantLanguage(blockText);
 
-function fixPersianText() {
-  resetFix();
-
-  const walker = document.createTreeWalker(
-    document.body,
-    NodeFilter.SHOW_TEXT,
-    {
-      acceptNode(node) {
-        if (!node.nodeValue || !containsPersian(node.nodeValue)) {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        if (!isEligibleTextContainer(node.parentElement)) {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        if (node.parentElement?.closest("[data-rtl-fix='1']")) {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        return NodeFilter.FILTER_ACCEPT;
+      if (lang === 'fa' || settings.mode === 'rtl') {
+        blockParent.classList.add('ptf-rtl-block');
+        blockParent.classList.remove('ptf-ltr-block');
+      } else if (settings.mode === 'default') {
+        blockParent.classList.remove('ptf-rtl-block');
+      }
+      blockParent.setAttribute('data-ptf-processed', 'true');
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (isExcluded(node)) return;
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null, false);
+      let textNode;
+      while ((textNode = walker.nextNode())) {
+        processNode(textNode);
       }
     }
-  );
-
-  const matched = [];
-  while (walker.nextNode()) {
-    matched.push(walker.currentNode);
   }
 
-  matched.forEach(node => {
-    const block = findNearestBlockContainer(node.parentElement);
-    if (block && !fixedBlocks.includes(block)) {
-      applyBlockAlignment(block);
-      fixedBlocks.push(block);
+  function clearFixes(root) {
+    const elements = root.nodeType === Node.ELEMENT_NODE ? root.querySelectorAll('.ptf-rtl-block') : [];
+    if (root.nodeType === Node.ELEMENT_NODE && root.classList && root.classList.contains('ptf-rtl-block')) {
+      root.classList.remove('ptf-rtl-block');
+      root.removeAttribute('data-ptf-processed');
     }
-    wrapPersianTextNode(node);
-  });
+    elements.forEach(el => {
+      el.classList.remove('ptf-rtl-block');
+      el.removeAttribute('data-ptf-processed');
+    });
+  }
 
-  fixedBlocks.forEach(block => {
-    const walker2 = document.createTreeWalker(
-      block,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode(node) {
-          if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
-          if (node.parentElement?.closest("[data-rtl-fix='1']")) return NodeFilter.FILTER_REJECT;
-          return NodeFilter.FILTER_ACCEPT;
-        }
+  function runIdleQueue() {
+    const nodesToProcess = Array.from(pendingNodes);
+    pendingNodes.clear();
+    isProcessing = false;
+
+    nodesToProcess.forEach(node => {
+      if (document.body.contains(node)) {
+        processNode(node);
       }
-    );
+    });
+  }
 
-    const plainText = [];
-    while (walker2.nextNode()) {
-      plainText.push(walker2.currentNode);
+  function queueNode(node) {
+    pendingNodes.add(node);
+    if (!isProcessing) {
+      isProcessing = true;
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(runIdleQueue, { timeout: 1000 });
+      } else {
+        setTimeout(runIdleQueue, 50);
+      }
     }
+  }
 
-    plainText.forEach(wrapNonPersianTextNode);
-  });
-}
+  function initObserver() {
+    if (observer) observer.disconnect();
+    if (!settings.autoFix) return;
 
-function resetFix() {
-  fixedNodes.forEach(wrapper => {
-    const parent = wrapper.parentNode;
-    if (!parent) return;
+    observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach(node => queueNode(node));
+        } else if (mutation.type === 'characterData') {
+          queueNode(mutation.target);
+        }
+      });
+    });
 
-    while (wrapper.firstChild) {
-      parent.insertBefore(wrapper.firstChild, wrapper);
+    observer.observe(document.body, {
+      childList: true,
+      characterData: true,
+      subtree: true
+    });
+  }
+
+  function applyFullPage() {
+    clearFixes(document.body);
+    if (settings.mode !== 'ltr') {
+      processNode(document.body);
     }
+  }
 
-    parent.removeChild(wrapper);
+  function loadSettings(callback) {
+    chrome.storage.local.get(['autoFix', 'mode'], (res) => {
+      if (res.autoFix !== undefined) settings.autoFix = res.autoFix;
+      if (res.mode !== undefined) settings.mode = res.mode;
+      callback();
+    });
+  }
+
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'updateSettings') {
+      settings.autoFix = request.settings.autoFix;
+      settings.mode = request.settings.mode;
+      
+      if (!settings.autoFix) {
+        if (observer) observer.disconnect();
+      } else {
+        initObserver();
+      }
+      
+      applyFullPage();
+      sendResponse({ success: true });
+    }
   });
 
-  fixedNodes = [];
-  fixedBlocks.forEach(restoreBlockAlignment);
-  fixedBlocks = [];
-}
-
-function processPage() {
-  const bodyText = document.body.textContent || "";
-  const hasPersian = /[\u0600-\u06FF]/.test(bodyText);
-  if (hasPersian) {
-    fixPersianText();
-  } else {
-    resetFix();
-  }
-}
-
-function stopAutoFixObserver() {
-  if (observer) {
-    observer.disconnect();
-    observer = null;
-  }
-  if (mutationTimer) {
-    clearTimeout(mutationTimer);
-    mutationTimer = null;
-  }
-}
-
-function startAutoFixObserver() {
-  if (!document.body) return;
-  stopAutoFixObserver();
-  observer = new MutationObserver(() => {
-    if (mutationTimer) clearTimeout(mutationTimer);
-    mutationTimer = setTimeout(processPage, 250);
+  loadSettings(() => {
+    injectStyles();
+    if (settings.autoFix || settings.mode !== 'default') {
+      applyFullPage();
+    }
+    initObserver();
   });
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    characterData: true
-  });
-  processPage();
-}
-
-function setAutoMode(enabled) {
-  autoMode = enabled;
-  if (autoMode) {
-    startAutoFixObserver();
-  } else {
-    stopAutoFixObserver();
-  }
-}
-
-function initAutoMode() {
-  chrome.storage.local.get({ autoMode: true }, ({ autoMode }) => {
-    setAutoMode(autoMode);
-  });
-}
-
-if (document.readyState === "complete" || document.readyState === "interactive") {
-  initAutoMode();
-} else {
-  document.addEventListener("DOMContentLoaded", initAutoMode);
-}
-
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.action === "fix") {
-    fixPersianText();
-    sendResponse({ fixed: true, auto: autoMode });
-    return true;
-  }
-
-  if (msg.action === "reset") {
-    resetFix();
-    sendResponse({ fixed: false, auto: autoMode });
-    return true;
-  }
-
-  if (msg.action === "state") {
-    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode });
-    return true;
-  }
-
-  if (msg.action === "setAuto") {
-    setAutoMode(Boolean(msg.auto));
-    sendResponse({ fixed: fixedNodes.length > 0, auto: autoMode });
-    return true;
-  }
-});
+})();

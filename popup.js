@@ -1,108 +1,59 @@
-const fixBtn = document.getElementById("fixBtn");
-const resetBtn = document.getElementById("resetBtn");
-const autoCheck = document.getElementById("autoCheck");
+document.addEventListener('DOMContentLoaded', () => {
+  const autoFixToggle = document.getElementById('autoFixToggle');
+  const modeRadios = document.getElementsByName('mode');
+  const applyBtn = document.getElementById('applyBtn');
 
-function setActionIcon() {
-  chrome.action.setIcon({
-    path: {
-      16: "icons/rtl-16.png",
-      32: "icons/rtl-32.png",
-      48: "icons/rtl-48.png",
-      128: "icons/rtl-128.png"
+  // Load saved settings
+  chrome.storage.local.get({
+    autoFix: true,
+    mode: 'default'
+  }, (items) => {
+    autoFixToggle.checked = items.autoFix;
+    for (let radio of modeRadios) {
+      if (radio.value === items.mode) {
+        radio.checked = true;
+        break;
+      }
     }
   });
-}
 
-function setDefaultIcon() {
-  chrome.action.setIcon({
-    path: {
-      16: "icons/default-16.png",
-      32: "icons/default-32.png",
-      48: "icons/default-48.png",
-      128: "icons/default-128.png"
+  function getSettings() {
+    let selectedMode = 'default';
+    for (let radio of modeRadios) {
+      if (radio.checked) {
+        selectedMode = radio.value;
+        break;
+      }
     }
-  });
-}
-
-function setActiveState(isFixed) {
-  if (isFixed) {
-    setActionIcon();
-    fixBtn.classList.add("active");
-    resetBtn.classList.remove("active");
-  } else {
-    setDefaultIcon();
-    resetBtn.classList.add("active");
-    fixBtn.classList.remove("active");
+    return {
+      autoFix: autoFixToggle.checked,
+      mode: selectedMode
+    };
   }
-}
 
-function setAutoCheckbox(enabled) {
-  autoCheck.checked = enabled;
-}
-
-function setAutoMode(enabled, notify = true) {
-  chrome.storage.local.set({ autoMode: enabled }, () => {
-    setAutoCheckbox(enabled);
-    if (notify) {
-      chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-        if (!tab?.id) return;
-        chrome.tabs.sendMessage(tab.id, { action: "setAuto", auto: enabled });
+  function saveAndApply() {
+    const settings = getSettings();
+    chrome.storage.local.set(settings, () => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'updateSettings',
+            settings: settings
+          }, (response) => {
+            if (chrome.runtime.lastError) {
+              // Content script might not be injected yet
+              console.warn("Could not contact content script.");
+            }
+          });
+        }
       });
-    }
-  });
-}
-
-async function queryState() {
-  const [tab] = await chrome.tabs.query({
-    active: true,
-    currentWindow: true
-  });
-
-  if (!tab?.id) {
-    setDefaultIcon();
-    return;
+    });
   }
 
-  chrome.tabs.sendMessage(tab.id, { action: "state" }, response => {
-    if (chrome.runtime.lastError || !response) {
-      setDefaultIcon();
-      return;
-    }
-    setActiveState(response.fixed);
-    if (typeof response.auto === "boolean") {
-      setAutoCheckbox(response.auto);
-    }
-  });
-}
-
-async function sendAction(action) {
-  const [tab] = await chrome.tabs.query({
-    active: true,
-    currentWindow: true
-  });
-
-  if (!tab?.id) return;
-
-  chrome.tabs.sendMessage(tab.id, { action }, response => {
-    if (chrome.runtime.lastError || !response) return;
-    setActiveState(response.fixed);
-  });
-}
-
-fixBtn.addEventListener("click", () => {
-  sendAction("fix");
-});
-
-resetBtn.addEventListener("click", () => {
-  sendAction("reset");
-});
-
-autoCheck.addEventListener("change", () => {
-  setAutoMode(autoCheck.checked);
-});
-
-chrome.storage.local.get({ autoMode: true }, ({ autoMode }) => {
-  setAutoCheckbox(autoMode);
-  setAutoMode(autoMode, false);
-  queryState();
+  // Event listeners
+  autoFixToggle.addEventListener('change', saveAndApply);
+  for (let radio of modeRadios) {
+    radio.addEventListener('change', saveAndApply);
+  }
+  applyBtn.addEventListener('click', saveAndApply);
 });

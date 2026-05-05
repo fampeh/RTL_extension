@@ -1,51 +1,123 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <style>
     body {
-      width: 160px;
-      padding: 12px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      width: 260px;
+      padding: 16px;
       margin: 0;
-      font-family: 'Segoe UI', Tahoma, sans-serif;
-      text-align: center;
+      background-color: #f9fafb;
+      color: #111827;
     }
-    button {
-      width: 100%;
-      padding: 8px;
-      margin: 6px 0;
-      border: none;
-      border-radius: 8px;
+    h2 {
+      font-size: 16px;
+      margin: 0 0 16px 0;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 8px;
+    }
+    .control-group {
+      margin-bottom: 16px;
+    }
+    .control-label {
       font-size: 14px;
-      cursor: pointer;
-      background-color: #e0e0e0;
-      color: #333;
-      font-weight: bold;
-      transition: 0.2s;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 8px;
     }
-    button.active {
-      background-color: #4caf50;
-      color: white;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
-    .auto-row {
-      margin-top: 8px;
-      font-size: 12px;
+    .toggle-container {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
+      justify-content: space-between;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 20px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #d1d5db;
+      transition: .4s;
+      border-radius: 20px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #3b82f6;
+    }
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+    .radio-group label {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .radio-group input {
+      margin-right: 8px;
+    }
+    .btn {
+      width: 100%;
+      padding: 8px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn:hover {
+      background: #2563eb;
     }
   </style>
 </head>
 <body>
-  <button id="fixBtn">RTL</button>
-  <button id="resetBtn">LTR</button>
+  <h2>Persian Text Fixer</h2>
+  
+  <div class="control-group toggle-container">
+    <span class="control-label" style="margin: 0;">Auto Fix Dynamic Content</span>
+    <label class="switch">
+      <input type="checkbox" id="autoFixToggle">
+      <span class="slider"></span>
+    </label>
+  </div>
 
-  <label class="auto-row" for="autoCheck">
-    <input type="checkbox" id="autoCheck" />
-    <span>Auto Fix</span>
-  </label>
+  <div class="control-group radio-group">
+    <span class="control-label">Fix Mode</span>
+    <label>
+      <input type="radio" name="mode" value="default"> Default (Smart Auto-RTL)
+    </label>
+    <label>
+      <input type="radio" name="mode" value="rtl"> Force RTL (Dominant Blocks)
+    </label>
+    <label>
+      <input type="radio" name="mode" value="ltr"> Disable Fixes (LTR)
+    </label>
+  </div>
+
+  <button id="applyBtn" class="btn">Apply to Current Tab</button>
 
   <script src="popup.js"></script>
 </body>
