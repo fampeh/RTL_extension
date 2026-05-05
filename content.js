@@ -1,10 +1,14 @@
-let fixedNodes = [];
-let fixedBlocks = [];
+const fixedNodes = new Set();
+const fixedBlocks = new Set();
 let autoMode = true;
 let currentMode = "default";
 let observer = null;
 let mutationTimer = null;
+const pendingRoots = new Set();
 const RTL_FIX_STYLE_ID = "rtl-fix-intrinsic-zones-style";
+const RTL_FIX_DYNAMIC_STYLE_ID = "rtl-fix-dynamic-style";
+const RTL_FIX_WRAPPER_CLASS = "rtl-fix-fragment";
+const RTL_FIX_BLOCK_CLASS = "rtl-fix-block";
 const INTRINSIC_LTR_SELECTOR = [
   "pre",
   "code",
@@ -61,24 +65,16 @@ function findNearestBlockContainer(el) {
 function applyBlockAlignment(block, preferredDirection = "rtl") {
   if (!block || block.dataset.rtlFixBlock === "1") return;
   block.dataset.rtlFixBlock = "1";
-  block.dataset.rtlFixOriginalTextAlign = block.style.textAlign || "";
-  block.dataset.rtlFixOriginalDirection = block.style.direction || "";
-  block.dataset.rtlFixOriginalUnicodeBidi = block.style.unicodeBidi || "";
-  block.style.textAlign = "right";
-  block.style.direction = preferredDirection;
-  block.style.unicodeBidi = "isolate";
+  block.dataset.rtlFixPreferredDirection = preferredDirection;
+  block.classList.add(RTL_FIX_BLOCK_CLASS);
   applyListAncestorAlignment(block);
 }
 
 function restoreBlockAlignment(block) {
   if (!block || block.dataset.rtlFixBlock !== "1") return;
-  block.style.textAlign = block.dataset.rtlFixOriginalTextAlign || "";
-  block.style.direction = block.dataset.rtlFixOriginalDirection || "";
-  block.style.unicodeBidi = block.dataset.rtlFixOriginalUnicodeBidi || "";
+  block.classList.remove(RTL_FIX_BLOCK_CLASS);
   delete block.dataset.rtlFixBlock;
-  delete block.dataset.rtlFixOriginalTextAlign;
-  delete block.dataset.rtlFixOriginalDirection;
-  delete block.dataset.rtlFixOriginalUnicodeBidi;
+  delete block.dataset.rtlFixPreferredDirection;
 }
 
 function applyListAncestorAlignment(block) {
@@ -87,13 +83,9 @@ function applyListAncestorAlignment(block) {
     if (node.tagName === "UL" || node.tagName === "OL") {
       if (node.dataset.rtlFixBlock !== "1") {
         node.dataset.rtlFixBlock = "1";
-        node.dataset.rtlFixOriginalTextAlign = node.style.textAlign || "";
-        node.dataset.rtlFixOriginalDirection = node.style.direction || "";
-        node.dataset.rtlFixOriginalUnicodeBidi = node.style.unicodeBidi || "";
-        node.style.textAlign = "right";
-        node.style.direction = "rtl";
-        node.style.unicodeBidi = "isolate";
-        fixedBlocks.push(node);
+        node.dataset.rtlFixPreferredDirection = "rtl";
+        node.classList.add(RTL_FIX_BLOCK_CLASS);
+        fixedBlocks.add(node);
       }
       break;
     }
@@ -104,16 +96,10 @@ function applyListAncestorAlignment(block) {
 function wrapTextFragment(text, isPersian) {
   const wrapper = document.createElement("span");
   wrapper.setAttribute("data-rtl-fix", "1");
-  wrapper.style.unicodeBidi = "isolate";
-
-  if (isPersian) {
-    wrapper.style.direction = "rtl";
-  } else {
-    wrapper.style.direction = "ltr";
-  }
+  wrapper.className = `${RTL_FIX_WRAPPER_CLASS} ${isPersian ? "rtl-fix-rtl" : "rtl-fix-ltr"}`;
 
   wrapper.textContent = text;
-  fixedNodes.push(wrapper);
+  fixedNodes.add(wrapper);
   return wrapper;
 }
 
@@ -134,22 +120,20 @@ function wrapPersianTextNode(textNode) {
 
 function fixIntrinsicZonesAlignment() {
   const intrinsicZones = document.querySelectorAll(INTRINSIC_LTR_SELECTOR);
-
   intrinsicZones.forEach(zone => {
     const block = findNearestBlockContainer(zone) || zone;
-    if (!fixedBlocks.includes(block)) {
+    if (!fixedBlocks.has(block)) {
       applyBlockAlignment(block, "ltr");
-      fixedBlocks.push(block);
+      fixedBlocks.add(block);
     }
   });
 }
 
-function fixPersianText() {
-  resetFix();
+function processRoot(root = document.body) {
+  if (!root) return;
   fixIntrinsicZonesAlignment();
-
   const walker = document.createTreeWalker(
-    document.body,
+    root,
     NodeFilter.SHOW_TEXT,
     {
       acceptNode(node) {
@@ -179,42 +163,47 @@ function fixPersianText() {
     matched.push(walker.currentNode);
   }
 
-  matched.forEach(node => {
+  for (const node of matched) {
+    if (!node.isConnected || !node.parentElement) continue;
     const block = findNearestBlockContainer(node.parentElement);
-    if (block && !fixedBlocks.includes(block)) {
+    if (block && !fixedBlocks.has(block)) {
       applyBlockAlignment(block);
-      fixedBlocks.push(block);
+      fixedBlocks.add(block);
     }
     wrapPersianTextNode(node);
-  });
+  }
+}
+
+function fixPersianText() {
+  processRoot(document.body);
 }
 
 function resetFix() {
-  fixedNodes.forEach(wrapper => {
+  for (const wrapper of fixedNodes) {
     const parent = wrapper.parentNode;
-    if (!parent) return;
+    if (!parent) continue;
 
     while (wrapper.firstChild) {
       parent.insertBefore(wrapper.firstChild, wrapper);
     }
 
     parent.removeChild(wrapper);
-  });
+  }
 
-  fixedNodes = [];
+  fixedNodes.clear();
   fixedBlocks.forEach(restoreBlockAlignment);
-  fixedBlocks = [];
+  fixedBlocks.clear();
 }
 
 function processPage() {
   ensureIntrinsicLtrStyles();
-  const bodyText = document.body.textContent || "";
-  const hasPersian = /[\u0600-\u06FF]/.test(bodyText);
-  if (hasPersian) {
-    fixPersianText();
-  } else {
-    resetFix();
+  if (pendingRoots.size === 0) {
+    processRoot(document.body);
+    return;
   }
+  const roots = Array.from(pendingRoots);
+  pendingRoots.clear();
+  roots.forEach(root => processRoot(root));
 }
 
 function ensureIntrinsicLtrStyles() {
@@ -230,6 +219,24 @@ function ensureIntrinsicLtrStyles() {
     }
   `;
   document.documentElement.appendChild(style);
+  const dynamicStyle = document.createElement("style");
+  dynamicStyle.id = RTL_FIX_DYNAMIC_STYLE_ID;
+  dynamicStyle.textContent = `
+    .${RTL_FIX_WRAPPER_CLASS} { unicode-bidi: isolate; }
+    .${RTL_FIX_WRAPPER_CLASS}.rtl-fix-rtl { direction: rtl; }
+    .${RTL_FIX_WRAPPER_CLASS}.rtl-fix-ltr { direction: ltr; }
+    .${RTL_FIX_BLOCK_CLASS}[data-rtl-fix-preferred-direction="rtl"] {
+      text-align: right;
+      direction: rtl;
+      unicode-bidi: isolate;
+    }
+    .${RTL_FIX_BLOCK_CLASS}[data-rtl-fix-preferred-direction="ltr"] {
+      text-align: right;
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+  `;
+  document.documentElement.appendChild(dynamicStyle);
 }
 
 function stopAutoFixObserver() {
@@ -246,9 +253,21 @@ function stopAutoFixObserver() {
 function startAutoFixObserver() {
   if (!document.body) return;
   stopAutoFixObserver();
-  observer = new MutationObserver(() => {
+  observer = new MutationObserver(mutations => {
+    for (const mutation of mutations) {
+      if (mutation.type === "characterData" && mutation.target?.parentElement) {
+        pendingRoots.add(mutation.target.parentElement);
+      }
+      if (mutation.type === "childList") {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.TEXT_NODE) {
+            pendingRoots.add(node.nodeType === Node.TEXT_NODE ? node.parentElement : node);
+          }
+        });
+      }
+    }
     if (mutationTimer) clearTimeout(mutationTimer);
-    mutationTimer = setTimeout(processPage, 250);
+    mutationTimer = setTimeout(processPage, 120);
   });
   observer.observe(document.body, {
     childList: true,
