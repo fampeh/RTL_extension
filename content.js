@@ -3,7 +3,9 @@ const fixedBlocks = new Set();
 let autoMode = true;
 let currentMode = "default";
 let observer = null;
-let mutationTimer = null;
+let idleHandle = null;
+let fallbackTimer = null;
+let scheduledAt = 0;
 const pendingRoots = new Set();
 const RTL_FIX_STYLE_ID = "rtl-fix-intrinsic-zones-style";
 const RTL_FIX_DYNAMIC_STYLE_ID = "rtl-fix-dynamic-style";
@@ -118,8 +120,11 @@ function wrapPersianTextNode(textNode) {
   textNode.remove();
 }
 
-function fixIntrinsicZonesAlignment() {
-  const intrinsicZones = document.querySelectorAll(INTRINSIC_LTR_SELECTOR);
+function fixIntrinsicZonesAlignment(root = document.body) {
+  if (!root || root.nodeType !== Node.ELEMENT_NODE) return;
+  const intrinsicZones = root.matches?.(INTRINSIC_LTR_SELECTOR)
+    ? [root, ...root.querySelectorAll(INTRINSIC_LTR_SELECTOR)]
+    : root.querySelectorAll(INTRINSIC_LTR_SELECTOR);
   intrinsicZones.forEach(zone => {
     const block = findNearestBlockContainer(zone) || zone;
     if (!fixedBlocks.has(block)) {
@@ -130,14 +135,18 @@ function fixIntrinsicZonesAlignment() {
 }
 
 function processRoot(root = document.body) {
-  if (!root) return;
-  fixIntrinsicZonesAlignment();
+  if (!root || !root.isConnected) return;
+  if (root.nodeType === Node.TEXT_NODE) {
+    root = root.parentElement;
+  }
+  if (!root || root.nodeType !== Node.ELEMENT_NODE) return;
+  fixIntrinsicZonesAlignment(root);
   const walker = document.createTreeWalker(
     root,
     NodeFilter.SHOW_TEXT,
     {
       acceptNode(node) {
-        if (!node.nodeValue || !containsPersian(node.nodeValue)) {
+        if (!node.nodeValue || node.nodeValue.length < 2 || !containsPersian(node.nodeValue)) {
           return NodeFilter.FILTER_REJECT;
         }
 
@@ -174,10 +183,6 @@ function processRoot(root = document.body) {
   }
 }
 
-function fixPersianText() {
-  processRoot(document.body);
-}
-
 function resetFix() {
   for (const wrapper of fixedNodes) {
     const parent = wrapper.parentNode;
@@ -196,7 +201,6 @@ function resetFix() {
 }
 
 function processPage() {
-  ensureIntrinsicLtrStyles();
   if (pendingRoots.size === 0) {
     processRoot(document.body);
     return;
@@ -204,6 +208,46 @@ function processPage() {
   const roots = Array.from(pendingRoots);
   pendingRoots.clear();
   roots.forEach(root => processRoot(root));
+}
+
+function runScheduledProcess(deadline) {
+  idleHandle = null;
+  if (fallbackTimer) {
+    clearTimeout(fallbackTimer);
+    fallbackTimer = null;
+  }
+
+  if (deadline && typeof deadline.timeRemaining === "function") {
+    while (pendingRoots.size > 0 && deadline.timeRemaining() > 4) {
+      const iterator = pendingRoots.values().next();
+      if (iterator.done) break;
+      const root = iterator.value;
+      pendingRoots.delete(root);
+      processRoot(root);
+    }
+    if (pendingRoots.size > 0) {
+      scheduleProcess(true);
+    }
+    return;
+  }
+
+  processPage();
+}
+
+function scheduleProcess(force = false) {
+  if (!force) {
+    const now = Date.now();
+    if (now - scheduledAt < 50 && (idleHandle !== null || fallbackTimer !== null)) return;
+    scheduledAt = now;
+  }
+
+  if (idleHandle !== null || fallbackTimer !== null) return;
+  const invoke = (deadline) => runScheduledProcess(deadline);
+  if (typeof requestIdleCallback === "function") {
+    idleHandle = requestIdleCallback(invoke, { timeout: 200 });
+    return;
+  }
+  fallbackTimer = setTimeout(() => invoke(), 60);
 }
 
 function ensureIntrinsicLtrStyles() {
@@ -244,10 +288,15 @@ function stopAutoFixObserver() {
     observer.disconnect();
     observer = null;
   }
-  if (mutationTimer) {
-    clearTimeout(mutationTimer);
-    mutationTimer = null;
+  if (idleHandle !== null && typeof cancelIdleCallback === "function") {
+    cancelIdleCallback(idleHandle);
+    idleHandle = null;
   }
+  if (fallbackTimer) {
+    clearTimeout(fallbackTimer);
+    fallbackTimer = null;
+  }
+  pendingRoots.clear();
 }
 
 function startAutoFixObserver() {
@@ -256,32 +305,39 @@ function startAutoFixObserver() {
   observer = new MutationObserver(mutations => {
     for (const mutation of mutations) {
       if (mutation.type === "characterData" && mutation.target?.parentElement) {
-        pendingRoots.add(mutation.target.parentElement);
+        const parent = mutation.target.parentElement;
+        if (parent && !parent.closest("[data-rtl-fix='1']")) {
+          pendingRoots.add(parent);
+        }
       }
       if (mutation.type === "childList") {
         mutation.addedNodes.forEach(node => {
           if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.TEXT_NODE) {
-            pendingRoots.add(node.nodeType === Node.TEXT_NODE ? node.parentElement : node);
+            const root = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+            if (root && !root.closest?.("[data-rtl-fix='1']")) {
+              pendingRoots.add(root);
+            }
           }
         });
       }
     }
-    if (mutationTimer) clearTimeout(mutationTimer);
-    mutationTimer = setTimeout(processPage, 120);
+    scheduleProcess();
   });
   observer.observe(document.body, {
     childList: true,
     subtree: true,
     characterData: true
   });
-  processPage();
+  pendingRoots.add(document.body);
+  scheduleProcess(true);
 }
 
 function applyMode(mode) {
   currentMode = mode;
+  ensureIntrinsicLtrStyles();
 
   if (mode === "rtl") {
-    fixPersianText();
+    processRoot(document.body);
     return;
   }
 
