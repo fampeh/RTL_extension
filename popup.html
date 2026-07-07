@@ -1,44 +1,159 @@
 <!DOCTYPE html>
-<html>
+<html lang="fa" dir="rtl">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #dbe3ef;
+      --primary: #2563eb;
+      --primary-soft: #e8f0ff;
+      --hover: #f3f7ff;
+      --shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
     body {
-      width: 120px;
-      padding: 12px;
+      width: 272px;
       margin: 0;
-      font-family: 'Segoe UI', Tahoma, sans-serif;
-      text-align: center;
+      padding: 14px;
+      font-family: "Vazirmatn", "Segoe UI", Tahoma, Arial, sans-serif;
+      background: radial-gradient(circle at top, #ffffff 0%, var(--bg) 65%);
+      color: var(--text);
+      direction: rtl;
     }
-    button {
-      width: 100%;
-      padding: 8px;
-      margin: 6px 0;
-      border: none;
-      border-radius: 8px;
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 12px;
+    }
+
+    .title {
       font-size: 14px;
+      font-weight: 700;
+      margin: 0 0 10px;
+      letter-spacing: 0.2px;
+    }
+
+    .mode-group {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+      direction: ltr;
+    }
+
+    .mode-option {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 4px;
       cursor: pointer;
-      background-color: #e0e0e0;
-      color: #333;
-      font-weight: bold;
-      transition: 0.2s;
+      transition: 0.18s ease;
+      gap: 4px;
+      direction: rtl;
     }
-    button.active {
-      background-color: #4caf50;
-      color: white;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+
+    .mode-option:hover {
+      border-color: #a6c1ff;
+      background: var(--hover);
     }
-    .status {
-      font-size: 10px;
-      margin-top: 8px;
-      color: #555;
+
+    .mode-option.active {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      box-shadow: inset 0 0 0 1px #bdd2ff;
     }
+
+    .mode-icon {
+      width: 26px;
+      height: 26px;
+      pointer-events: none;
+    }
+
+    .mode-text {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+      pointer-events: none;
+    }
+
+    .auto-row {
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .switch { position: relative; display: inline-block; width: 42px; height: 22px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: #cbd5e1;
+      transition: .2s;
+      border-radius: 999px;
+    }
+    .slider::before {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      top: 3px;
+      border-radius: 50%;
+      background: white;
+      transition: .2s;
+    }
+    .switch input:checked + .slider { background-color: var(--primary); }
+    .switch input:checked + .slider::before { transform: translateX(20px); }
   </style>
 </head>
 <body>
-  <button id="fixBtn">RTL</button>
-  <button id="resetBtn">LTR</button>
-  <div id="status" class="status"></div>
+  <section class="card">
+
+    <div class="mode-group" id="modeGroup" aria-label="انتخاب حالت">
+      <button class="mode-option" data-mode="ltr" aria-label="حالت چپ‌چین" title="غیرفعال کردن اصلاح‌ها" type="button">
+        <img class="mode-icon" src="icons/ltr-32.png" alt="چپ‌چین" />
+        <span class="mode-text">چپ‌چین</span>
+      </button>
+      <button class="mode-option" data-mode="default" aria-label="حالت پیش‌فرض" title="اصلاح هوشمند متن فارسی" type="button">
+        <img class="mode-icon" src="icons/default-32.png" alt="پیش‌فرض" />
+        <span class="mode-text">پیش‌فرض</span>
+      </button>
+      <button class="mode-option" data-mode="rtl" aria-label="حالت راست‌چین" title="راست‌چین کردن متن فارسی" type="button">
+        <img class="mode-icon" src="icons/rtl-32.png" alt="راست‌چین" />
+        <span class="mode-text">راست‌چین</span>
+      </button>
+    </div>
+
+    <label class="auto-row" for="autoCheck">
+      <span>اصلاح خودکار</span>
+      <span class="switch">
+        <input type="checkbox" id="autoCheck" />
+        <span class="slider"></span>
+      </span>
+    </label>
+  </section>
 
   <script src="popup.js"></script>
 </body>
