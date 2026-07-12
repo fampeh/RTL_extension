@@ -1,18 +1,33 @@
 {
   "manifest_version": 3,
   "name": "راست‌چین‌کن متن فارسی",
-  "version": "1.0.0",
-  "description": "متن‌های فارسی را در وب خواناتر و راست‌چین می‌کند.",
+  "version": "2.0.0",
+  "description": "متن‌های فارسی را در وب خواناتر و اصلاح می‌کند.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "scripting"
   ],
+  "host_permissions": [
+    "*://chat.openai.com/*",
+    "*://chatgpt.com/*",
+    "*://gemini.google.com/*",
+    "*://notebooklm.google.com/*",
+    "*://copilot.microsoft.com/*",
+    "*://claude.ai/*",
+    "*://chat.deepseek.com/*",
+    "*://poe.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": [
         "*://chat.openai.com/*",
         "*://chatgpt.com/*",
         "*://gemini.google.com/*",
+        "*://notebooklm.google.com/*",
         "*://copilot.microsoft.com/*",
         "*://claude.ai/*",
         "*://chat.deepseek.com/*",
